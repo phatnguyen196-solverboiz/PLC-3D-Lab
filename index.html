@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101b29">
+  <title>PLC 3D Lab — Mô phỏng Ladder & băng tải</title>
+  <meta name="description" content="Mô phỏng một trạm băng tải 24 V DC: lập trình Ladder, chạy từng chu kỳ quét, quan sát I/O và thiết bị trong không gian 3D.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101b29'/%3E%3Cpath d='M13 12v40m38-40v40M13 22h12l7 10h8l11 0M13 43h14m10 0h14' fill='none' stroke='%2352d7c3' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">⌁</span><div><strong>PLC 3D LAB</strong><small>Trạm băng tải · 24 V DC</small></div></div>
+      <div class="top-status"><span class="status-dot" id="run-dot"></span><span id="run-status">Đang tạm dừng</span><span class="divider"></span><span id="scan-label">Scan 00000</span></div>
+      <div class="top-actions"><button id="reset-program" class="quiet-btn" title="Khôi phục chương trình mẫu">Khôi phục mẫu</button><button id="save-program" class="quiet-btn">Lưu JSON</button><label class="quiet-btn file-label">Mở JSON<input id="load-program" type="file" accept="application/json,.json" hidden></label></div>
+    </header>
+
+    <main class="workspace">
+      <aside class="left-rail panel">
+        <div class="panel-heading"><span class="eyebrow">SƠ ĐỒ HỆ THỐNG</span><h2>Băng tải phân loại</h2></div>
+        <p class="muted intro">Nhấn Start để chạy. Sau 3 kiện qua cảm biến, băng tải dừng và đèn báo đầy bật. Reset để chạy lô tiếp theo.</p>
+        <div class="flow-list">
+          <div><span class="flow-num">01</span><span><b>Tủ điều khiển</b><small>Nguồn 24 V → PLC → ngõ ra</small></span></div>
+          <div><span class="flow-num">02</span><span><b>Cảm biến quang</b><small>Phát hiện kiện hàng tại X2</small></span></div>
+          <div><span class="flow-num">03</span><span><b>Motor & đèn</b><small>Y0 chạy băng tải · Y2 báo đầy</small></span></div>
+        </div>
+        <div class="rail-section"><div class="section-title">BẢN ĐỒ I/O <span>PLC 24 V</span></div><div id="io-map" class="io-map"></div></div>
+        <div class="rail-note"><span class="note-icon">i</span><p>Đây là mô hình chức năng để học logic. Tên chân, kiểu nguồn và mạch bảo vệ phải kiểm tra theo datasheet PLC thực tế trước khi đấu điện.</p></div>
+      </aside>
+
+      <section class="center-stack">
+        <section class="scene-panel panel" aria-labelledby="scene-title">
+          <div class="scene-bar"><div><span class="eyebrow">MÔ HÌNH TƯƠNG TÁC</span><h1 id="scene-title">Trạm băng tải & tủ PLC</h1></div><div class="scene-bar-right"><div class="view-tabs" role="group" aria-label="Chế độ xem"><button id="view-3d" class="selected" aria-pressed="true">3D</button><button id="view-wire" aria-pressed="false">Mạch 24 V</button></div><span class="scene-hint">Kéo để xoay · Cuộn để phóng</span><button id="camera-reset" class="icon-button" title="Đặt lại góc nhìn" aria-label="Đặt lại góc nhìn">⟲</button></div></div>
+          <div id="scene" class="scene-view"><div class="scene-fallback" hidden>Không mở được WebGL trên thiết bị này. Phần Ladder và mô phỏng I/O vẫn sử dụng được.</div><div class="scene-overlay"><span><i class="legend-dot green"></i> Y0 MOTOR</span><span><i class="legend-dot blue"></i> X2 SENSOR</span><span><i class="legend-dot amber"></i> Y2 ĐẦY</span></div>
+            <div id="wiring" class="wiring-view" hidden>
+              <svg viewBox="0 0 900 400" role="img" aria-labelledby="wiring-title wiring-desc"><title id="wiring-title">Sơ đồ chức năng PLC 24 V DC</title><desc id="wiring-desc">Nguồn 24 V nuôi PLC và tín hiệu ngõ vào; PLC điều khiển bộ dẫn động motor và đèn. E-stop đi qua mạch an toàn độc lập.</desc>
+                <defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5 0 7" fill="none" stroke="#74c4c0" stroke-width="1.6"/></marker></defs>
+                <path class="schem-wire" d="M95 68H800M95 323H800M95 68V323M800 68V323"/><text x="25" y="73" class="schem-title">+24 V</text><text x="32" y="329" class="schem-title">0 V</text>
+                <rect x="100" y="116" width="138" height="150" rx="8" class="schem-box"/><text x="118" y="146" class="schem-title">NGÕ VÀO</text><text x="118" y="178">X0 Start · NO</text><text x="118" y="203">X1 Stop · NC</text><text x="118" y="228">X2 Sensor · PNP</text><text x="118" y="253">X3 Reset · NO</text>
+                <rect x="325" y="116" width="168" height="150" rx="8" class="schem-box plc-box"/><text x="344" y="146" class="schem-title">PLC CPU</text><text x="344" y="178">L+ / M : nguồn</text><text x="344" y="203">X0–X4 : input</text><text x="344" y="228">Y0–Y2 : output</text><text x="344" y="253">Scan : 100 ms</text>
+                <rect x="585" y="116" width="190" height="150" rx="8" class="schem-box"/><text x="603" y="146" class="schem-title">TẢI / DRIVER</text><text x="603" y="178">Y0 → K1 → Motor</text><text x="603" y="203">Y1 → Đèn RUN</text><text x="603" y="228">Y2 → Đèn đầy</text><text x="603" y="253">Cuộn K1 có diode</text>
+                <path class="schem-signal" d="M238 191H319M493 191H579" marker-end="url(#arrow)"/><text x="250" y="177" class="schem-caption">tín hiệu</text><text x="505" y="177" class="schem-caption">điều khiển</text>
+                <path class="schem-wire" d="M168 68V110M409 68V110M680 68V110M168 272V323M409 272V323M680 272V323"/>
+                <text x="103" y="370" class="schem-note">X4: phản hồi E-stop. Mạch an toàn phần cứng phải cắt năng lượng motor độc lập với PLC.</text>
+              </svg>
+              <p>Sơ đồ chức năng, chưa phải bản đấu dây cho một model PLC. Cần chọn loại input PNP/NPN, output relay/transistor, cầu chì và driver theo datasheet.</p>
+            </div>
+          </div>
+          <div class="transport"><div class="transport-main"><button id="play-btn" class="primary-btn">▶ Chạy mô phỏng</button><button id="step-btn" class="secondary-btn">Bước 1 scan</button><button id="plant-reset" class="secondary-btn">Đặt lại hệ</button></div><div class="transport-meta">Chu kỳ quét <strong>100 ms</strong> <span>·</span> Tốc độ mô phỏng <strong>1×</strong></div></div>
+        </section>
+
+        <section class="ladder-panel panel" aria-labelledby="ladder-title">
+          <div class="ladder-head"><div><span class="eyebrow">LẬP TRÌNH PLC</span><h2 id="ladder-title">Ladder Editor <span class="count-badge" id="rung-count">6 rungs</span></h2></div><div class="ladder-actions"><button id="add-coil" class="secondary-btn">+ Coil</button><button id="add-timer" class="secondary-btn">+ TON</button><button id="add-counter" class="secondary-btn">+ CTU</button></div></div>
+          <div class="ladder-explainer">Tiếp điểm cùng nhánh là AND; các nhánh song song là OR. Rungs được xử lý từ trên xuống trong mỗi scan. <button id="help-toggle" class="text-btn" aria-expanded="false">Cách đọc ↗</button></div>
+          <div id="help-panel" class="help-panel" hidden><b>Ví dụ tự giữ:</b> X1 và X4 phải đóng, còn X0 hoặc M0 kích hoạt cuộn M0. Khi nhả Start, nhánh M0 giữ mạch. NC đảo giá trị logic. TON chỉ đủ thời gian khi điều kiện duy trì; CTU đếm cạnh lên.</div>
+          <div class="ladder-scroll"><div id="rungs" class="rungs"></div></div>
+          <div class="editor-foot"><span id="program-note">Chương trình mẫu · chỉnh sửa có hiệu lực ở scan tiếp theo</span><span class="wire-key"><i></i> Đường có điện</span></div>
+        </section>
+      </section>
+
+      <aside class="right-rail panel">
+        <div class="panel-heading"><span class="eyebrow">BẢNG ĐIỀU KHIỂN</span><h2>Tín hiệu trực tiếp</h2></div>
+        <div class="operator"><button id="start-btn" class="operator-btn start"><span>START</span><small>X0 · nhấn xung</small></button><button id="stop-btn" class="operator-btn stop"><span>STOP</span><small>X1 · NC</small></button><button id="estop-btn" class="operator-btn emergency"><span>EMERGENCY</span><small>X4 · giữ / nhả</small></button><button id="reset-count-btn" class="operator-btn reset"><span>RESET LÔ</span><small>X3 · nhấn xung</small></button></div>
+        <button id="sensor-btn" class="sensor-trigger">Kích cảm biến thủ công <span>X2</span></button>
+        <div class="section-title live-title">NGÕ VÀO <span id="input-count">0/5 ON</span></div><div id="input-list" class="signal-list"></div>
+        <div class="section-title live-title">NGÕ RA & BỘ NHỚ</div><div id="output-list" class="signal-list"></div>
+        <div class="metrics"><div><small>BỘ ĐẾM C0</small><strong id="counter-value">0 <span>/ 3</span></strong><div class="meter"><i id="counter-meter"></i></div></div><div><small>TIMER T0</small><strong id="timer-value">0.0 <span>/ 1.5 s</span></strong><div class="meter"><i id="timer-meter"></i></div></div></div>
+        <div class="event-box"><div class="section-title">NHẬT KÝ SCAN</div><div id="event-log" aria-live="polite"></div></div>
+      </aside>
+    </main>
+    <footer class="footer"><span>PLC 3D Lab · mô phỏng trên trình duyệt</span><span>Không kết nối hoặc nạp chương trình vào PLC thật</span></footer>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
